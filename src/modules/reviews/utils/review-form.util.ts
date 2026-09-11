@@ -1,4 +1,5 @@
 import { ReviewModel } from '../../../database/models/review.model';
+import { toHospitalSlug } from '../../../common/utils/hospital-slug.util';
 import { CreateReviewDto } from '../dto/create-review.dto';
 import { ReviewResponseDto } from '../dto/review-response.dto';
 
@@ -213,6 +214,9 @@ export function buildReviewResponse(review: ReviewModel): ReviewResponseDto {
     id: review.id,
     hospitalId: review.hospitalId,
     hospitalName: review.hospital?.name,
+    hospitalSlug: review.hospital?.name
+      ? toHospitalSlug(review.hospital.name, review.hospital.id ?? review.hospitalId)
+      : undefined,
     unitId: review.unitId,
     unitName: review.unit?.name ?? '',
     roleId: review.roleId,

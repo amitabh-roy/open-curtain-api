@@ -10,6 +10,9 @@ export class ReviewResponseDto {
   @ApiPropertyOptional({ example: 'Jackson Memorial Hospital' })
   hospitalName?: string;
 
+  @ApiPropertyOptional({ example: 'jackson-memorial-hospital-1' })
+  hospitalSlug?: string;
+
   @ApiProperty({
     example: 1,
     description: 'Reusable unit definition ID mapped to the reviewed hospital',

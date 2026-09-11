@@ -118,7 +118,7 @@ export class ReviewsService {
       });
 
       const review = await this.reviewModel.findByPk(createdReview.id, {
-        include: [UnitModel, UserModel, RoleModel],
+        include: [UnitModel, UserModel, RoleModel, HospitalModel],
       });
 
       if (!review) {
