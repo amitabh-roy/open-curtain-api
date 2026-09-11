@@ -136,6 +136,21 @@ export class AdminController {
     return this.adminService.reactivateUser(id);
   }
 
+  @Post('users/:id/clear-flag')
+  clearFlag(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.clearFlag(id);
+  }
+
+  @Delete('users/:id')
+  deleteUser(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.deleteUser(id);
+  }
+
+  @Delete('reviews/:id')
+  deleteReview(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.deleteReview(id);
+  }
+
   @Patch('users/:id/verification')
   @AdminUpdateVerificationSwagger()
   adminUpdateVerification(

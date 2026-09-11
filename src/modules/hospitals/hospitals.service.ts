@@ -3,7 +3,10 @@ import { InjectModel } from '@nestjs/sequelize';
 import { fn, col, Op } from 'sequelize';
 
 import { ControllerResponse } from '../../common/interfaces/controller-response.interface';
-import { toHospitalSlug } from '../../common/utils/hospital-slug.util';
+import {
+  parseHospitalIdFromSlug,
+  toHospitalSlug,
+} from '../../common/utils/hospital-slug.util';
 import { handleDatabaseException } from '../../common/utils/database-exception.util';
 import { resolveStateSearchValues } from '../../common/utils/state-search.util';
 import { HospitalModel } from '../../database/models/hospital.model';
@@ -18,6 +21,10 @@ import { HospitalsListResponseDto } from './dto/hospitals-list-response.dto';
 import { ListHospitalsQueryDto } from './dto/list-hospitals-query.dto';
 import { SearchHospitalsQueryDto } from './dto/search-hospitals-query.dto';
 import { UnitResponseDto } from './dto/unit-response.dto';
+import {
+  findCmsHospitalBySlugOrName,
+  getHospitalAliasCmsId,
+} from './utils/cms-hospital-data.util';
 import {
   buildHospitalReviewStats,
   type HospitalReviewStats,
@@ -80,43 +87,130 @@ export class HospitalsService {
         throw new NotFoundException(HOSPITAL_RESPONSE.NOT_FOUND);
       }
 
-      const [hospitalUnits, approvedReviewCount, reviewStats] =
-        await Promise.all([
-          this.hospitalUnitModel.findAll({
-            where: { hospitalId: id },
-            include: [UnitModel],
-          }),
-          this.reviewModel.count({
-            where: { hospitalId: id, status: 'approved' },
-          }),
-          this.getReviewStatsForHospitals([id]).then(
-            (stats) => stats.get(id) ?? buildHospitalReviewStats([]),
-          ),
-        ]);
-
-      const units = hospitalUnits
-        .map((hospitalUnit) => hospitalUnit.unit)
-        .filter((unit): unit is UnitModel => Boolean(unit))
-        .sort((left, right) => left.name.localeCompare(right.name));
-
-      return {
-        message: HOSPITAL_RESPONSE.FETCH_ONE,
-        data: {
-          ...this.toHospitalResponse(
-            hospital,
-            approvedReviewCount,
-            reviewStats,
-          ),
-          units: units.map((unit) => this.toUnitResponse(unit)),
-          approvedReviewCount,
-        },
-      };
+      return this.buildHospitalDetailResponse(hospital);
     } catch (error) {
       handleDatabaseException(error, {
         context: HospitalsService.name,
         operation: 'hospital detail lookup',
       });
     }
+  }
+
+  async findBySlug(
+    slug: string,
+  ): Promise<ControllerResponse<HospitalDetailResponseDto>> {
+    try {
+      const trimmed = slug.trim();
+      let hospital: HospitalModel | null = null;
+
+      // 1. Try parsing numeric ID from slug suffix (e.g. "tampa-general-hospital-922")
+      const numericId = parseHospitalIdFromSlug(trimmed);
+      if (numericId) {
+        hospital = await this.hospitalModel.findByPk(numericId);
+      }
+
+      // 2. Check alias mapping (e.g. "jackson-memorial-hospital" -> CMS 100022)
+      const aliasCmsId = getHospitalAliasCmsId(trimmed);
+
+      // 3. Search DB by CMS ID (supporting raw number, CMS- prefixed, and alias)
+      if (!hospital) {
+        const cleanCms = trimmed.replace(/^cms-/i, '');
+        const cmsCandidates = [trimmed, cleanCms, `CMS-${cleanCms}`];
+        if (aliasCmsId) {
+          cmsCandidates.push(aliasCmsId, `CMS-${aliasCmsId}`);
+        }
+
+        hospital = await this.hospitalModel.findOne({
+          where: {
+            cmsId: { [Op.in]: cmsCandidates },
+          },
+        });
+      }
+
+      // 4. Search DB by name (ILIKE matching words from slug)
+      if (!hospital) {
+        const nameQuery = trimmed.replace(/-/g, ' ');
+        hospital = await this.hospitalModel.findOne({
+          where: {
+            name: { [Op.iLike]: `%${nameQuery}%` },
+          },
+        });
+      }
+
+      // 5. STRICT CMS CSV CHECK: If still not found in DB, check Hospital_General_Information.csv
+      if (!hospital) {
+        const cmsRecord = findCmsHospitalBySlugOrName(trimmed);
+        if (cmsRecord) {
+          // Check if it exists in DB by the CMS record's ID
+          hospital = await this.hospitalModel.findOne({
+            where: {
+              cmsId: { [Op.in]: [cmsRecord.cmsId, `CMS-${cmsRecord.cmsId}`] },
+            },
+          });
+
+          // If not in DB at all, insert it from the official CMS CSV record
+          if (!hospital) {
+            hospital = await this.hospitalModel.create({
+              cmsId: cmsRecord.cmsId,
+              name: cmsRecord.name,
+              city: cmsRecord.city,
+              state: cmsRecord.state,
+              facilityType: cmsRecord.facilityType,
+              averageRating: 0,
+              source: 'CMS',
+              isActive: true,
+            });
+          }
+        }
+      }
+
+      if (!hospital) {
+        throw new NotFoundException(HOSPITAL_RESPONSE.NOT_FOUND);
+      }
+
+      return this.buildHospitalDetailResponse(hospital);
+    } catch (error) {
+      handleDatabaseException(error, {
+        context: HospitalsService.name,
+        operation: 'hospital slug lookup',
+      });
+    }
+  }
+
+  private async buildHospitalDetailResponse(
+    hospital: HospitalModel,
+  ): Promise<ControllerResponse<HospitalDetailResponseDto>> {
+    const [hospitalUnits, approvedReviewCount, reviewStats] =
+      await Promise.all([
+        this.hospitalUnitModel.findAll({
+          where: { hospitalId: hospital.id, deletedAt: null },
+          include: [{ model: UnitModel, where: { deletedAt: null } }],
+        }),
+        this.reviewModel.count({
+          where: { hospitalId: hospital.id, status: 'approved' },
+        }),
+        this.getReviewStatsForHospitals([hospital.id]).then(
+          (stats) => stats.get(hospital.id) ?? buildHospitalReviewStats([]),
+        ),
+      ]);
+
+    const units = hospitalUnits
+      .map((hospitalUnit) => hospitalUnit.unit)
+      .filter((unit): unit is UnitModel => Boolean(unit))
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    return {
+      message: HOSPITAL_RESPONSE.FETCH_ONE,
+      data: {
+        ...this.toHospitalResponse(
+          hospital,
+          approvedReviewCount,
+          reviewStats,
+        ),
+        units: units.map((unit) => this.toUnitResponse(unit)),
+        approvedReviewCount,
+      },
+    };
   }
 
   async exists(id: number): Promise<boolean> {
@@ -169,13 +263,30 @@ export class HospitalsService {
     }
 
     if (searchText) {
-      where[Op.or] = [
+      const aliasCmsId = getHospitalAliasCmsId(searchText);
+      const searchConditions: any[] = [
         { cmsId: { [Op.iLike]: `%${searchText}%` } },
         { name: { [Op.iLike]: `%${searchText}%` } },
         { city: { [Op.iLike]: `%${searchText}%` } },
         { state: { [Op.iLike]: `%${searchText}%` } },
         { facilityType: { [Op.iLike]: `%${searchText}%` } },
       ];
+
+      if (aliasCmsId) {
+        searchConditions.push(
+          { cmsId: aliasCmsId },
+          { cmsId: `CMS-${aliasCmsId}` },
+        );
+      }
+
+      const words = searchText.split(/\s+/).filter(Boolean);
+      if (words.length > 1) {
+        searchConditions.push({
+          name: { [Op.and]: words.map((w) => ({ [Op.iLike]: `%${w}%` })) },
+        });
+      }
+
+      where[Op.or] = searchConditions;
     }
 
     let dbOrder: any[] = [

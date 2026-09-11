@@ -70,8 +70,8 @@ export class ReviewsService {
       }
 
       const hospitalUnit = await this.hospitalUnitModel.findOne({
-        where: { hospitalId: dto.hospitalId, unitId: dto.unitId },
-        include: [UnitModel],
+        where: { hospitalId: dto.hospitalId, unitId: dto.unitId, deletedAt: null },
+        include: [{ model: UnitModel, where: { deletedAt: null } }],
       });
 
       if (!hospitalUnit?.unit) {
@@ -85,6 +85,13 @@ export class ReviewsService {
       if (duplicate) {
         throw new BadRequestException(REVIEW_RESPONSE.DUPLICATE_REVIEW);
       }
+
+      // If a previous soft-deleted review exists for this user and hospital, permanently purge it
+      // so there are no residual constraint conflicts or orphaned records.
+      await this.reviewModel.destroy({
+        where: { hospitalId: dto.hospitalId, userId: user.id },
+        force: true,
+      });
 
       if (user.verificationStatus !== 'verified') {
         const pendingVerification =
@@ -111,7 +118,7 @@ export class ReviewsService {
       });
 
       const review = await this.reviewModel.findByPk(createdReview.id, {
-        include: [UnitModel, UserModel, RoleModel],
+        include: [UnitModel, UserModel, RoleModel, HospitalModel],
       });
 
       if (!review) {
@@ -312,7 +319,9 @@ export class ReviewsService {
 
       const hospitalId = review.hospitalId;
       const wasApproved = review.status === 'approved';
-      await review.destroy();
+
+      await this.reviewReportModel.destroy({ where: { reviewId }, force: true });
+      await review.destroy({ force: true });
 
       if (wasApproved) {
         await this.syncHospitalAverageRating(hospitalId);

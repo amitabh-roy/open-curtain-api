@@ -46,12 +46,23 @@ jobs:
             -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:github-ci
+      - name: Debug Tailscale
+        run: |
+          tailscale status
+          ping -c 3 ${{ secrets.LIGHTSAIL_TAILSCALE_IP }}
+          
       - name: Deploy to Lightsail
         env:
           IMAGE_TAG: ${{ github.sha }}
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.LIGHTSAIL_IP_DEV }}
+          host: ${{ secrets.LIGHTSAIL_TAILSCALE_IP }}
           username: ${{ secrets.LIGHTSAIL_USER }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           envs: IMAGE_TAG

@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  NotFoundException,
   Param,
   ParseIntPipe,
   Query,
@@ -9,7 +8,6 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 
 import { ControllerResponse } from '../../common/interfaces/controller-response.interface';
-import { parseHospitalIdFromSlug } from '../../common/utils/hospital-slug.util';
 import {
   GetHospitalByIdSwagger,
   GetHospitalBySlugSwagger,
@@ -22,7 +20,6 @@ import { HospitalFiltersResponseDto } from './dto/hospital-filters-response.dto'
 import { HospitalsListResponseDto } from './dto/hospitals-list-response.dto';
 import { ListHospitalsQueryDto } from './dto/list-hospitals-query.dto';
 import { SearchHospitalsQueryDto } from './dto/search-hospitals-query.dto';
-import { HOSPITAL_RESPONSE } from './constants/hospital.response';
 import {
   HospitalFiltersService,
   HospitalsService,
@@ -63,13 +60,7 @@ export class HospitalsController {
   findBySlug(
     @Param('slug') slug: string,
   ): Promise<ControllerResponse<HospitalDetailResponseDto>> {
-    const id = parseHospitalIdFromSlug(slug);
-
-    if (!id) {
-      throw new NotFoundException(HOSPITAL_RESPONSE.NOT_FOUND);
-    }
-
-    return this.hospitalsService.findById(id);
+    return this.hospitalsService.findBySlug(slug);
   }
 
   @Get(':id')

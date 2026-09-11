@@ -16,6 +16,8 @@ describe('HospitalsService', () => {
   const hospitalModel = {
     findAndCountAll: jest.fn(),
     findByPk: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
     count: jest.fn(),
   };
   const hospitalUnitModel = {
@@ -42,6 +44,8 @@ describe('HospitalsService', () => {
     service = module.get<HospitalsService>(HospitalsService);
     hospitalModel.findAndCountAll.mockReset();
     hospitalModel.findByPk.mockReset();
+    hospitalModel.findOne.mockReset();
+    hospitalModel.create.mockReset();
     hospitalModel.count.mockReset();
     hospitalUnitModel.findAll.mockReset();
     reviewModel.count.mockReset();
@@ -95,10 +99,56 @@ describe('HospitalsService', () => {
     expect(result.data.units).toHaveLength(1);
   });
 
+  it('should return a hospital by slug with id suffix', async () => {
+    hospitalModel.findByPk.mockResolvedValue({
+      id: 1,
+      cmsId: 'CMS-1001',
+      name: 'City Hospital',
+      city: 'New York',
+      state: 'NY',
+      facilityType: 'General Acute Care',
+      averageRating: '4.5',
+    });
+    hospitalUnitModel.findAll.mockResolvedValue([]);
+    reviewModel.count.mockResolvedValue(0);
+    reviewModel.findAll.mockResolvedValue([]);
+
+    const result = await service.findBySlug('city-hospital-1');
+
+    expect(result.message).toBe(HOSPITAL_RESPONSE.FETCH_ONE);
+    expect(result.data.id).toBe(1);
+    expect(hospitalModel.findByPk).toHaveBeenCalledWith(1);
+  });
+
+  it('should return a hospital by slug without id suffix via DB lookup', async () => {
+    hospitalModel.findByPk.mockResolvedValue(null);
+    hospitalModel.findOne.mockResolvedValue({
+      id: 922,
+      cmsId: '100128',
+      name: 'TAMPA GENERAL HOSPITAL',
+      city: 'TAMPA',
+      state: 'FL',
+      facilityType: 'Acute Care Hospitals',
+      averageRating: '4.1',
+    });
+    hospitalUnitModel.findAll.mockResolvedValue([]);
+    reviewModel.count.mockResolvedValue(0);
+    reviewModel.findAll.mockResolvedValue([]);
+
+    const result = await service.findBySlug('tampa-general-hospital');
+
+    expect(result.message).toBe(HOSPITAL_RESPONSE.FETCH_ONE);
+    expect(result.data.id).toBe(922);
+  });
+
   it('should throw when hospital is not found', async () => {
     hospitalModel.findByPk.mockResolvedValue(null);
+    hospitalModel.findOne.mockResolvedValue(null);
 
     await expect(service.findById(999)).rejects.toThrow(NotFoundException);
+    await expect(service.findBySlug('unknown-hospital-999999')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('should report existence correctly', async () => {

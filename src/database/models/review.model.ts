@@ -26,11 +26,15 @@ export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
 @Table({
   tableName: 'reviews',
+  paranoid: true,
   indexes: [
     {
       unique: true,
       fields: ['hospital_id', 'user_id'],
       name: 'reviews_hospital_user_unique',
+      where: {
+        deleted_at: null,
+      },
     },
   ],
 })

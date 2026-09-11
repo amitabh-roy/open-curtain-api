@@ -18,6 +18,7 @@ export class UnitsService {
   async findAll(): Promise<ControllerResponse<UnitsListResponseDto>> {
     try {
       const rows = await this.unitModel.findAll({
+        where: { deletedAt: null },
         order: [['name', 'ASC']],
       });
 

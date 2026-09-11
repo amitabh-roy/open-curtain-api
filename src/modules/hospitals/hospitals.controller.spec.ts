@@ -10,6 +10,7 @@ describe('HospitalsController', () => {
   const hospitalsService = {
     findAll: jest.fn(),
     findById: jest.fn(),
+    findBySlug: jest.fn(),
     searchHospitals: jest.fn(),
   };
 
@@ -57,5 +58,16 @@ describe('HospitalsController', () => {
     });
     await controller.findOne(1);
     expect(hospitalsService.findById).toHaveBeenCalledWith(1);
+  });
+
+  it('should delegate findBySlug to service', async () => {
+    hospitalsService.findBySlug.mockReturnValue({
+      message: 'ok',
+      data: { id: 1, slug: 'tampa-general-hospital-1' },
+    });
+    await controller.findBySlug('tampa-general-hospital');
+    expect(hospitalsService.findBySlug).toHaveBeenCalledWith(
+      'tampa-general-hospital',
+    );
   });
 });

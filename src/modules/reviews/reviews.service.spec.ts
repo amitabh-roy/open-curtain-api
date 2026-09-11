@@ -22,7 +22,9 @@ describe('ReviewsService', () => {
     findOne: jest.fn(),
     create: jest.fn(),
     findByPk: jest.fn(),
+    findAll: jest.fn(),
     findAndCountAll: jest.fn(),
+    destroy: jest.fn().mockResolvedValue(1),
   };
   const hospitalModel = {
     findByPk: jest.fn(),
@@ -42,6 +44,7 @@ describe('ReviewsService', () => {
     create: jest.fn(),
     findAll: jest.fn(),
     findByPk: jest.fn(),
+    destroy: jest.fn().mockResolvedValue(1),
   };
   const emailService = {
     sendMail: jest.fn(),
@@ -313,4 +316,78 @@ describe('ReviewsService', () => {
       ),
     ).rejects.toThrow(NotFoundException);
   });
+
+  it('should permanently delete review and attached reports on deleteByOwner', async () => {
+    const mockReview = {
+      id: 10,
+      userId: authenticatedUser.id,
+      hospitalId: 1,
+      status: 'approved',
+      destroy: jest.fn().mockResolvedValue(true),
+    };
+    reviewModel.findByPk.mockResolvedValue(mockReview);
+    reviewModel.findAll.mockResolvedValue([]);
+    hospitalModel.update.mockResolvedValue([1]);
+
+    const result = await service.deleteByOwner(10, authenticatedUser);
+
+    expect(result.message).toBe(REVIEW_RESPONSE.DELETED);
+    expect(reviewReportModel.destroy).toHaveBeenCalledWith({
+      where: { reviewId: 10 },
+      force: true,
+    });
+    expect(mockReview.destroy).toHaveBeenCalledWith({ force: true });
+    expect(hospitalModel.update).toHaveBeenCalledWith(
+      { averageRating: 0 },
+      { where: { id: 1 } },
+    );
+  });
+
+  it('should allow creating a new review after a previous review was deleted', async () => {
+    hospitalModel.findByPk.mockResolvedValue({ id: 1, name: 'Jackson Memorial' });
+    hospitalUnitModel.findOne.mockResolvedValue({
+      hospitalId: 1,
+      unitId: 1,
+      unit: { id: 1, name: 'ICU' },
+    });
+    reviewModel.findOne.mockResolvedValue(null);
+    reviewModel.destroy.mockResolvedValue(1);
+    reviewModel.create.mockResolvedValue({ id: 99 });
+    reviewModel.findByPk.mockResolvedValue({
+      id: 99,
+      hospitalId: 1,
+      unitId: 1,
+      userId: 1,
+      roleId: 1,
+      rating: 5,
+      comment: 'Fresh review after deletion',
+      employmentType: 'full_time',
+      shiftType: 'day',
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      unit: { name: 'ICU' },
+      user: { fullName: 'Taylor Brooks' },
+      role: { name: 'nurse' },
+    });
+
+    const result = await service.create(
+      {
+        hospitalId: 1,
+        unitId: 1,
+        rating: 5,
+        comment: 'Fresh review after deletion',
+        employmentType: 'full_time',
+        shiftType: 'day',
+      },
+      authenticatedUser,
+    );
+
+    expect(result.message).toBe(REVIEW_RESPONSE.CREATED);
+    expect(reviewModel.destroy).toHaveBeenCalledWith({
+      where: { hospitalId: 1, userId: authenticatedUser.id },
+      force: true,
+    });
+  });
 });
+

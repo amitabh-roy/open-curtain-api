@@ -630,4 +630,104 @@ export class AdminService {
       });
     }
   }
+
+  async clearFlag(userId: number): Promise<ControllerResponse<any>> {
+    try {
+      const user = await this.userModel.findByPk(userId, { paranoid: false });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      await user.update({ verificationStatus: 'pending', warningMessage: null });
+
+      return {
+        message: 'Account flag cleared successfully',
+        data: null,
+      };
+    } catch (error) {
+      handleDatabaseException(error, {
+        context: AdminService.name,
+        operation: 'clear flag',
+      });
+    }
+  }
+
+  async deleteUser(userId: number): Promise<ControllerResponse<any>> {
+    try {
+      const user = await this.userModel.findByPk(userId, { paranoid: false });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      await this.reviewModel.destroy({ where: { userId }, force: true });
+      await user.destroy({ force: true });
+
+      return {
+        message: 'User deleted successfully',
+        data: null,
+      };
+    } catch (error) {
+      handleDatabaseException(error, {
+        context: AdminService.name,
+        operation: 'delete user',
+      });
+    }
+  }
+
+  async deleteReview(reviewId: number): Promise<ControllerResponse<any>> {
+    try {
+      const review = await this.reviewModel.findByPk(reviewId, { paranoid: false });
+
+      if (!review) {
+        throw new NotFoundException('Review not found');
+      }
+
+      const hospitalId = review.hospitalId;
+      const wasApproved = review.status === 'approved';
+
+      await this.reviewReportModel.destroy({ where: { reviewId }, force: true });
+      await review.destroy({ force: true });
+
+      if (wasApproved) {
+        await this.syncHospitalAverageRating(hospitalId);
+      }
+
+      return {
+        message: 'Review deleted successfully',
+        data: null,
+      };
+    } catch (error) {
+      handleDatabaseException(error, {
+        context: AdminService.name,
+        operation: 'delete review',
+      });
+    }
+  }
+
+  private async syncHospitalAverageRating(hospitalId: number): Promise<void> {
+    const reviews = await this.reviewModel.findAll({
+      where: {
+        hospitalId,
+        status: 'approved',
+      },
+    });
+
+    if (reviews.length === 0) {
+      await this.hospitalModel.update(
+        { averageRating: 0 },
+        { where: { id: hospitalId } },
+      );
+      return;
+    }
+
+    const total = reviews.reduce((sum, review) => sum + review.rating, 0);
+    const averageRating = Math.round((total / reviews.length) * 10) / 10;
+
+    await this.hospitalModel.update(
+      { averageRating },
+      { where: { id: hospitalId } },
+    );
+  }
 }
