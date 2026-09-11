@@ -72,7 +72,7 @@ export class CreateReviewDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @Min(0.01)
   hourlyRate?: number;
 
   @ApiPropertyOptional({ example: '5–6' })
@@ -150,7 +150,7 @@ export class CreateReviewDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @Min(0.01)
   yearlyCompensation?: number;
 
   @ApiPropertyOptional({ example: 'yes' })
