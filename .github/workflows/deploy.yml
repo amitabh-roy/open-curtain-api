@@ -62,8 +62,11 @@ jobs:
               "OLD_IMAGE=$(docker inspect --format='"'"'{{.Image}}'"'"' '"$CONTAINER_NAME"' 2>/dev/null || true)",
               "docker pull '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
               "docker stop '"$CONTAINER_NAME"' || true",
-              "docker rm '"$CONTAINER_NAME"' || true",
+              "docker rm -f '"$CONTAINER_NAME"' || true",
+              "docker network rm '"$CONTAINER_NAME"'-net || true",
               "docker network create '"$CONTAINER_NAME"'-net || true",
+              "# Free port 3000 if anything else is holding it",
+              "fuser -k 3000/tcp || true",
               "docker run -d --name '"$CONTAINER_NAME"' --network '"$CONTAINER_NAME"'-net -p 3000:3000 --restart unless-stopped '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
               "if [ -n \"$OLD_IMAGE\" ]; then docker rmi \"$OLD_IMAGE\" || true; fi",
               "docker image prune -af"
@@ -73,12 +76,10 @@ jobs:
 
           echo "SSM Command ID: $COMMAND_ID"
 
-          # Wait, but do not let a Failed status kill the job yet
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
             --instance-id "${{ secrets.LIGHTSAIL_SSM_ID_DEV }}" || true
 
-          # Always fetch the real output/error
           RESULT=$(aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
             --instance-id "${{ secrets.LIGHTSAIL_SSM_ID_DEV }}" \
@@ -87,10 +88,8 @@ jobs:
 
           echo "$RESULT"
 
-          # Fail the job if the remote command did not succeed
           STATUS=$(echo "$RESULT" | jq -r .Status)
           if [ "$STATUS" != "Success" ]; then
             echo "Remote SSM command failed with status: $STATUS"
             exit 1
           fi
-            
