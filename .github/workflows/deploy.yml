@@ -46,53 +46,39 @@ jobs:
             -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          audience: ${{ secrets.TS_AUDIENCE }}
-          tags: tag:github-ci
-      - name: Debug Tailscale
-        run: |
-          tailscale status
-          ping -c 3 ${{ secrets.LIGHTSAIL_TAILSCALE_IP }}
-          
-      - name: Deploy to Lightsail
+      - name: Deploy to Lightsail via SSM
         env:
           IMAGE_TAG: ${{ github.sha }}
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.LIGHTSAIL_TAILSCALE_IP }}
-          username: ${{ secrets.LIGHTSAIL_USER }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
-          envs: IMAGE_TAG
-          script: |
-            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${{ steps.ecr-login.outputs.registry }}
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "${{ secrets.LIGHTSAIL_SSM_ID_DEV }}" \
+            --parameters 'commands=[
+              "set -e",
+              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
+              "OLD_IMAGE=$(docker inspect --format='"'"'{{.Image}}'"'"' '"$CONTAINER_NAME"' 2>/dev/null || true)",
+              "docker pull '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
+              "docker stop '"$CONTAINER_NAME"' || true",
+              "docker rm '"$CONTAINER_NAME"' || true",
+              "docker network create '"$CONTAINER_NAME"'-net || true",
+              "docker run -d --name '"$CONTAINER_NAME"' --network '"$CONTAINER_NAME"'-net -p 3000:3000 --restart unless-stopped '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
+              "if [ -n \"$OLD_IMAGE\" ]; then docker rmi \"$OLD_IMAGE\" || true; fi",
+              "docker image prune -af"
+            ]' \
+            --query 'Command.CommandId' \
+            --output text)
 
-            OLD_IMAGE=$(docker inspect --format='{{.Image}}' opencurtain-api 2>/dev/null || true)
+          echo "SSM Command ID: $COMMAND_ID"
 
-            docker pull ${{ steps.ecr-login.outputs.registry }}/opencurtain/api:$IMAGE_TAG
-            docker stop opencurtain-api || true
-            docker rm opencurtain-api || true
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ secrets.LIGHTSAIL_SSM_ID_DEV }}"
 
-            docker network create opencurtain-net || true
-
-            docker run -d --name opencurtain-api \
-              --network opencurtain-net \
-              -p 3001:3001 \
-              --restart unless-stopped \
-              ${{ steps.ecr-login.outputs.registry }}/opencurtain/api:$IMAGE_TAG
-            
-            sleep 5
-            echo "Running DB migrations...."
-            docker exec opencurtain-api npm run db:migrate
-
-            echo "Running DB seed...."
-            docker exec opencurtain-api npm run db:seed
-
-            if [ -n "$OLD_IMAGE" ]; then
-              docker rmi "$OLD_IMAGE" || true
-            fi
-
-            docker image prune -af
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ secrets.LIGHTSAIL_SSM_ID_DEV }}" \
+            --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+            --output json
             
