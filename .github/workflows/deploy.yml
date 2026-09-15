@@ -65,9 +65,9 @@ jobs:
               "docker rm -f '"$CONTAINER_NAME"' || true",
               "docker network rm '"$CONTAINER_NAME"'-net || true",
               "docker network create '"$CONTAINER_NAME"'-net || true",
-              "# Free port 3000 if anything else is holding it",
-              "fuser -k 3000/tcp || true",
-              "docker run -d --name '"$CONTAINER_NAME"' --network '"$CONTAINER_NAME"'-net -p 3000:3000 --restart unless-stopped '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
+              "# Free port 3001 if anything else is holding it",
+              "fuser -k 3001/tcp || true",
+              "docker run -d --name '"$CONTAINER_NAME"' --network '"$CONTAINER_NAME"'-net -p 3001:3001 --restart unless-stopped '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
               "if [ -n \"$OLD_IMAGE\" ]; then docker rmi \"$OLD_IMAGE\" || true; fi",
               "docker image prune -af"
             ]' \
