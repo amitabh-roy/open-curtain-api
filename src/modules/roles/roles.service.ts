@@ -20,22 +20,18 @@ export class RolesService {
     try {
       const rows = await this.roleModel.findAll({
         where: {
+          deletedAt: null,
           name: {
-            [Op.ne]: 'admin',
+            [Op.notIn]: ['admin', 'Other'],
           },
         },
+        order: [['name', 'ASC']],
       });
 
-      const items: RoleOptionDto[] = rows
-        .sort((a, b) => {
-          if (a.name === 'Other') return 1;
-          if (b.name === 'Other') return -1;
-          return a.name.localeCompare(b.name);
-        })
-        .map((role) => ({
-          id: role.id,
-          name: role.name,
-        }));
+      const items: RoleOptionDto[] = rows.map((role) => ({
+        id: role.id,
+        name: role.name,
+      }));
 
       return {
         message: ROLES_RESPONSE.FETCH_ALL,

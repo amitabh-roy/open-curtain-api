@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 
 import { ControllerResponse } from '../../common/interfaces/controller-response.interface';
 import { handleDatabaseException } from '../../common/utils/database-exception.util';
@@ -18,7 +19,12 @@ export class UnitsService {
   async findAll(): Promise<ControllerResponse<UnitsListResponseDto>> {
     try {
       const rows = await this.unitModel.findAll({
-        where: { deletedAt: null },
+        where: {
+          deletedAt: null,
+          name: {
+            [Op.notIn]: ['Other', 'Skilled Nursing Facility (SNF)'],
+          },
+        },
         order: [['name', 'ASC']],
       });
 

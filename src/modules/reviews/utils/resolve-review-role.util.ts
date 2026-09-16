@@ -4,6 +4,8 @@ import { RoleModel } from '../../../database/models/role.model';
 
 const ROLE_ALIASES: Record<string, string> = {
   'case manager / social worker': 'Social Worker',
+  'case manager': 'Case Manager',
+  'social worker': 'Social Worker',
   'certified registered nurse anesthetist (crna)': 'Other',
   'er technician': 'Other',
   'advanced practice rn / np (aprn)': 'Nurse Practitioner (NP, APRN)',

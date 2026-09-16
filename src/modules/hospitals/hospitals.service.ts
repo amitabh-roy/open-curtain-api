@@ -184,7 +184,17 @@ export class HospitalsService {
       await Promise.all([
         this.hospitalUnitModel.findAll({
           where: { hospitalId: hospital.id, deletedAt: null },
-          include: [{ model: UnitModel, where: { deletedAt: null } }],
+          include: [
+            {
+              model: UnitModel,
+              where: {
+                deletedAt: null,
+                name: {
+                  [Op.notIn]: ['Other', 'Skilled Nursing Facility (SNF)'],
+                },
+              },
+            },
+          ],
         }),
         this.reviewModel.count({
           where: { hospitalId: hospital.id, status: 'approved' },
