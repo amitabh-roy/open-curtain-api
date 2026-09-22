@@ -83,7 +83,7 @@ export class HospitalsService {
     try {
       const hospital = await this.hospitalModel.findByPk(id);
 
-      if (!hospital) {
+      if (!hospital || hospital.isActive === false) {
         throw new NotFoundException(HOSPITAL_RESPONSE.NOT_FOUND);
       }
 
@@ -164,7 +164,7 @@ export class HospitalsService {
         }
       }
 
-      if (!hospital) {
+      if (!hospital || hospital.isActive === false) {
         throw new NotFoundException(HOSPITAL_RESPONSE.NOT_FOUND);
       }
 
@@ -225,7 +225,11 @@ export class HospitalsService {
 
   async exists(id: number): Promise<boolean> {
     try {
-      return (await this.hospitalModel.count({ where: { id } })) > 0;
+      return (
+        (await this.hospitalModel.count({
+          where: { id, isActive: true },
+        })) > 0
+      );
     } catch (error) {
       handleDatabaseException(error, {
         context: HospitalsService.name,
@@ -242,7 +246,9 @@ export class HospitalsService {
     const limit = query.limit ?? 10;
     const offset = (page - 1) * limit;
 
-    const where: Record<string | symbol, unknown> = {};
+    const where: Record<string | symbol, unknown> = {
+      isActive: true,
+    };
 
     if (query.city) {
       where.city = { [Op.iLike]: `%${query.city.trim()}%` };

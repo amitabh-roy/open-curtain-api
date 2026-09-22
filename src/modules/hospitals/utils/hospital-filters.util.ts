@@ -41,11 +41,12 @@ export async function loadHospitalFilterOptions(
   }
 
   const [stateRows, facilityTypeRows] = await Promise.all([
-    sequelize.query('SELECT DISTINCT state FROM hospitals ORDER BY state ASC', {
-      type: QueryTypes.SELECT,
-    }),
     sequelize.query(
-      'SELECT DISTINCT facility_type AS "facilityType" FROM hospitals ORDER BY facility_type ASC',
+      'SELECT DISTINCT state FROM hospitals WHERE deleted_at IS NULL AND is_active = true ORDER BY state ASC',
+      { type: QueryTypes.SELECT },
+    ),
+    sequelize.query(
+      'SELECT DISTINCT facility_type AS "facilityType" FROM hospitals WHERE deleted_at IS NULL AND is_active = true ORDER BY facility_type ASC',
       { type: QueryTypes.SELECT },
     ),
   ]);
