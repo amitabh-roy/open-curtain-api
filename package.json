@@ -12,6 +12,7 @@
     "db:migrate:undo:all": "sequelize-cli db:migrate:undo:all --config src/database/sequelize-cli.config.cjs --migrations-path src/database/migrations",
     "db:seed": "sequelize-cli db:seed:all --config src/database/sequelize-cli.config.cjs --seeders-path src/database/seeders",
     "db:seed:undo": "sequelize-cli db:seed:undo:all --config src/database/sequelize-cli.config.cjs --seeders-path src/database/seeders",
+    "db:import-sql": "node scripts/run-sql-file.cjs",
     "import:hospitals": "node scripts/import-cms-hospitals.cjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
