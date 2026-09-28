@@ -280,17 +280,19 @@ export class HospitalsService {
 
     if (searchText) {
       const aliasCmsId = getHospitalAliasCmsId(searchText);
-      const hyphenated = searchText.replace(/\s+/g, '-');
-      const dehyphenated = searchText.replace(/[-_]+/g, ' ');
+      const wordPrefix = (val: string) => [
+        { [Op.iLike]: `${val}%` },
+        { [Op.iLike]: `% ${val}%` },
+        { [Op.iLike]: `%-${val}%` },
+        { [Op.iLike]: `%(${val}%` },
+      ];
 
       const searchConditions: any[] = [
         { cmsId: { [Op.iLike]: `%${searchText}%` } },
-        { name: { [Op.iLike]: `%${searchText}%` } },
-        { city: { [Op.iLike]: `%${searchText}%` } },
-        { city: { [Op.iLike]: `%${hyphenated}%` } },
-        { city: { [Op.iLike]: `%${dehyphenated}%` } },
-        { state: { [Op.iLike]: `%${searchText}%` } },
-        { facilityType: { [Op.iLike]: `%${searchText}%` } },
+        { name: { [Op.or]: wordPrefix(searchText) } },
+        { city: { [Op.or]: wordPrefix(searchText) } },
+        { state: { [Op.iLike]: `${searchText}%` } },
+        { facilityType: { [Op.or]: wordPrefix(searchText) } },
       ];
 
       if (aliasCmsId) {
@@ -304,17 +306,25 @@ export class HospitalsService {
       if (words.length > 1) {
         searchConditions.push(
           {
-            name: { [Op.and]: words.map((w) => ({ [Op.iLike]: `%${w}%` })) },
+            name: {
+              [Op.and]: words.map((w) => ({
+                [Op.or]: wordPrefix(w),
+              })),
+            },
           },
           {
-            city: { [Op.and]: words.map((w) => ({ [Op.iLike]: `%${w}%` })) },
+            city: {
+              [Op.and]: words.map((w) => ({
+                [Op.or]: wordPrefix(w),
+              })),
+            },
           },
           {
             [Op.and]: words.map((w) => ({
               [Op.or]: [
-                { name: { [Op.iLike]: `%${w}%` } },
-                { city: { [Op.iLike]: `%${w}%` } },
-                { state: { [Op.iLike]: `%${w}%` } },
+                { name: { [Op.or]: wordPrefix(w) } },
+                { city: { [Op.or]: wordPrefix(w) } },
+                { state: { [Op.iLike]: `${w}%` } },
               ],
             })),
           },
