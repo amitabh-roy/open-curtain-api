@@ -24,19 +24,27 @@ async function run() {
   console.log(`Reading SQL script: ${sqlFilePath}`);
   const sql = fs.readFileSync(sqlFilePath, 'utf8');
 
+  const host = process.env.DB_HOST || 'localhost';
+  const port = Number(process.env.DB_PORT || 5432);
+  const user = process.env.DB_USER || 'postgres';
+  const password = process.env.DB_PASSWORD || 'postgres';
+  const database = process.env.DB_NAME || 'opencurtain_db';
+  const isAwsRds = host.includes('rds.amazonaws.com');
+  const ssl = process.env.DB_SSL === 'true' || isAwsRds ? { rejectUnauthorized: false } : false;
+
   const client = new Client({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT || 5432),
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_NAME || 'opencurtain_db',
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    host,
+    port,
+    user,
+    password,
+    database,
+    ssl,
   });
 
-  console.log(`Connecting to database "${process.env.DB_NAME || 'opencurtain_db'}" on ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}...`);
+  console.log(`Connecting to database "${database}" on ${host}:${port}...`);
   await client.connect();
 
-  console.log('Executing SQL script (truncating & importing hospitals and hospital_units)...');
+  console.log('Executing SQL script (safe upsert & hospital_units mapping)...');
   const startTime = Date.now();
   const res = await client.query(sql);
 
@@ -46,7 +54,13 @@ async function run() {
   const results = Array.isArray(res) ? res : [res];
   for (const r of results) {
     if (r.rows && r.rows.length > 0) {
-      console.log('Count Result:', r.rows);
+      const row = r.rows[0];
+      if (row.total_hospitals_imported) {
+        console.log(`Total Hospitals: ${row.total_hospitals_imported}`);
+      }
+      if (row.total_hospital_units_created) {
+        console.log(`Total Hospital Units: ${row.total_hospital_units_created}`);
+      }
     }
   }
 
