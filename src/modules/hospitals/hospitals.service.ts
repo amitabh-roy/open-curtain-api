@@ -280,10 +280,15 @@ export class HospitalsService {
 
     if (searchText) {
       const aliasCmsId = getHospitalAliasCmsId(searchText);
+      const hyphenated = searchText.replace(/\s+/g, '-');
+      const dehyphenated = searchText.replace(/[-_]+/g, ' ');
+
       const searchConditions: any[] = [
         { cmsId: { [Op.iLike]: `%${searchText}%` } },
         { name: { [Op.iLike]: `%${searchText}%` } },
         { city: { [Op.iLike]: `%${searchText}%` } },
+        { city: { [Op.iLike]: `%${hyphenated}%` } },
+        { city: { [Op.iLike]: `%${dehyphenated}%` } },
         { state: { [Op.iLike]: `%${searchText}%` } },
         { facilityType: { [Op.iLike]: `%${searchText}%` } },
       ];
@@ -295,11 +300,25 @@ export class HospitalsService {
         );
       }
 
-      const words = searchText.split(/\s+/).filter(Boolean);
+      const words = searchText.split(/[\s-]+/).filter(Boolean);
       if (words.length > 1) {
-        searchConditions.push({
-          name: { [Op.and]: words.map((w) => ({ [Op.iLike]: `%${w}%` })) },
-        });
+        searchConditions.push(
+          {
+            name: { [Op.and]: words.map((w) => ({ [Op.iLike]: `%${w}%` })) },
+          },
+          {
+            city: { [Op.and]: words.map((w) => ({ [Op.iLike]: `%${w}%` })) },
+          },
+          {
+            [Op.and]: words.map((w) => ({
+              [Op.or]: [
+                { name: { [Op.iLike]: `%${w}%` } },
+                { city: { [Op.iLike]: `%${w}%` } },
+                { state: { [Op.iLike]: `%${w}%` } },
+              ],
+            })),
+          },
+        );
       }
 
       where[Op.or] = searchConditions;
