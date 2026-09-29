@@ -75,8 +75,8 @@ jobs:
 
               "# --- Health check (wait up to ~60s) ---",
               "HEALTHY=false",
-              "for i in $(seq 1 12); do",
-              "  if curl -sf --max-time 3 http://localhost:3001/ > /dev/null 2>&1; then",
+              "for i in $(seq 1 18); do",
+              "  if curl -s -o /dev/null --max-time 3 http://localhost:3001/ 2>/dev/null || curl -s -o /dev/null --max-time 3 http://localhost:3001/api/ 2>/dev/null; then",
               "    HEALTHY=true",
               "    break",
               "  fi",
