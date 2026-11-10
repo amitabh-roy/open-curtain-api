@@ -1,4 +1,7 @@
-FROM node:22-alpine
+FROM node:24.22.1-alpine
+
+# Upgrade Alpine packages, including vulnerable zlib
+RUN apk update && apk upgrade --no-cache
 
 WORKDIR /app
 
